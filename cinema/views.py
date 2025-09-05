@@ -1,15 +1,17 @@
 from datetime import datetime
 
 from django.db.models import F, Count
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
 from cinema.models import Genre, Actor, CinemaHall, Movie, MovieSession, Order
 from cinema.permissions import IsAdminOrIfAuthenticatedReadOnly
-
 from cinema.serializers import (
     GenreSerializer,
     ActorSerializer,
@@ -67,6 +69,7 @@ class MovieViewSet(
     serializer_class = MovieSerializer
     authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAdminOrIfAuthenticatedReadOnly,)
+    parser_classes = (MultiPartParser, FormParser)
 
     @staticmethod
     def _params_to_ints(qs):
@@ -93,6 +96,29 @@ class MovieViewSet(
             queryset = queryset.filter(actors__id__in=actors_ids)
 
         return queryset.distinct()
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="upload-image",
+        permission_classes=[IsAdminOrIfAuthenticatedReadOnly],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_image(self, request, pk=None):
+        movie = self.get_object()
+        image = request.data.get("image")
+
+        # Check if 'image' key exists and has a valid value
+        if not image or getattr(image, "size", 0) == 0:
+            return Response(
+                {"error": "No image provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        movie.image = image
+        movie.save()
+        serializer = self.get_serializer(movie)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_serializer_class(self):
         if self.action == "list":
