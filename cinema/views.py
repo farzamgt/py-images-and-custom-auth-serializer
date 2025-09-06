@@ -2,10 +2,14 @@ from datetime import datetime
 
 from django.db.models import F, Count
 from rest_framework import viewsets, mixins, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import (
+    IsAuthenticated,
+    IsAuthenticatedOrReadOnly
+)
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
@@ -22,6 +26,7 @@ from cinema.serializers import (
     MovieDetailSerializer,
     MovieSessionDetailSerializer,
     MovieListSerializer,
+    UploadImageSerializer,
     OrderSerializer,
     OrderListSerializer,
 )
@@ -106,19 +111,14 @@ class MovieViewSet(
     )
     def upload_image(self, request, pk=None):
         movie = self.get_object()
-        image = request.data.get("image")
-
-        # Check if 'image' key exists and has a valid value
-        if not image or getattr(image, "size", 0) == 0:
+        serializer = UploadImageSerializer(data=request.data)
+        if serializer.is_valid():
+            movie.image = serializer.validated_data["image"]
+            movie.save()
             return Response(
-                {"error": "No image provided"},
-                status=status.HTTP_400_BAD_REQUEST
+                self.get_serializer(movie).data, status=status.HTTP_200_OK
             )
-
-        movie.image = image
-        movie.save()
-        serializer = self.get_serializer(movie)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -128,6 +128,23 @@ class MovieViewSet(
             return MovieDetailSerializer
 
         return MovieSerializer
+
+
+class UploadImageView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def post(self, request, *args, **kwargs):
+        serializer = UploadImageSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response(
+                {"message": "Image uploaded"},
+                status=status.HTTP_200_OK
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class MovieSessionViewSet(viewsets.ModelViewSet):

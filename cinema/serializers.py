@@ -144,6 +144,10 @@ class MovieSessionDetailSerializer(MovieSessionSerializer):
         fields = ("id", "show_time", "movie", "cinema_hall", "taken_places")
 
 
+class UploadImageSerializer(serializers.Serializer):
+    image = serializers.ImageField()
+
+
 class OrderSerializer(serializers.ModelSerializer):
     tickets = TicketSerializer(many=True, read_only=False, allow_empty=False)
 
